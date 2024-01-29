@@ -4,12 +4,25 @@ version = "0.1.0"
 description = ""
 authors = ["William Marstrand <wdmdevelop@gmail.com>"]
 readme = "README.md"
-packages = [{include = "copti", from = "src"}]
+packages = [{include = "copti", from = "src"},
+            {include = 'cyipopt', from = '/home/william/miniconda3/lib/python3.10/site-packages/'},
+]
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = "^3.10"
+scipy = "^1.12.0"
+torch = "^2.1.2"
+numpy = "^1.26.3"
+casadi = "^3.6.4"
+gekko = "^1.0.6"
+cvxopt = "^1.3.2"
+cvxpy = "^1.4.2"
+pyomo = "^6.7.0"
 
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+copti = "copti.main:main"
