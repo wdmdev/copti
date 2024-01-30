@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm #colormap
 
 
-def plot_2d(f:Callable[[NDArray[np.float64], NDArray[np.float64]], NDArray[np.float64]], 
+def plot_2d(f:Callable[[NDArray[np.float64]], np.float64], 
             x1: NDArray[np.float64], x2: NDArray[np.float64],
             save_path:Union[str,None]=None, show:bool=False, 
             color_map:str="RdYlBu_r") -> None:
@@ -17,7 +17,8 @@ def plot_2d(f:Callable[[NDArray[np.float64], NDArray[np.float64]], NDArray[np.fl
     """
 
     X1, X2 = np.meshgrid(x1, x2)
-    Z = f(X1, X2)
+    X = np.array([X1, X2])
+    Z = f(X)
 
     fig, ax = plt.subplots()
     cmap = cm.get_cmap(color_map)
