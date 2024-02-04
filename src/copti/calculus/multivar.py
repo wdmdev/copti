@@ -3,7 +3,9 @@ import numpy as np
 from numpy.typing import NDArray
 from autograd import grad, jacobian
 
-def f_grad_hess(f: Callable[[NDArray[np.float64]], np.float64], x: NDArray[np.float64]) -> Tuple[Callable[[NDArray[np.float64]], np.float64], NDArray[np.float64], NDArray[np.float64]]:
+def f_grad_hess(f: Callable[[NDArray[np.float64]], np.float64], 
+                x: NDArray[np.float64]) -> Tuple[Callable[[NDArray[np.float64]], np.float64], 
+                                                 NDArray[np.float64], NDArray[np.float64]]:
     """ Compute the gradient and Hessian of a multivariate function f(x) at x using automatic differentiation.
 
     Args:
@@ -24,6 +26,7 @@ def f_grad_hess(f: Callable[[NDArray[np.float64]], np.float64], x: NDArray[np.fl
     hessian = hess_func(x)
 
     return f, gradient, hessian
+
 
 def central_finite_diff_grad(f: Callable[[NDArray[np.float64]], float], x: NDArray[np.float64], eps: float = 1e-8) -> float:
     """Compute the gradient of a multivariate function f(x) at x using central finite differences.
