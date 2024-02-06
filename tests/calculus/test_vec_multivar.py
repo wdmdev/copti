@@ -1,31 +1,54 @@
 import numpy as np
 from numpy.typing import NDArray
 import sympy as sp
-from copti.calculus.vec_multivar import f_jac, f_hess, forward_finite_jac, forward_finite_hess
+from copti.calculus.vec_multivar import f_jac, f_grad, f_hess, forward_finite_jac, forward_finite_hess
 
 
 def test_f_jac():
     """Test that f_jac returns the correct result."""
     # Define a simple vector function
     x1, x2 = sp.symbols('x1 x2')
-    f = sp.Matrix([x1**2, x2**2])
+    f = sp.Matrix([x1**2 + x2, x2**2 + 2*x1])
 
     def f_numpy(x: NDArray[np.float64]) -> NDArray[np.float64]:
-        return np.array([[x[0]**2], 
-                        [x[1]**2]])
+        return np.array([[x[0]**2 + x[1]], 
+                        [x[1]**2 + 2*x[0]]])
 
     def jac_f_numpy(x: NDArray[np.float64]) -> NDArray[np.float64]:
-        return np.array([[2*x[0], 0], [0, 2*x[1]]])
+        return np.array([[2*x[0], 1], 
+                         [2, 2*x[1]]])
     
     # Define the point at which to evaluate f and jac_f
     x0 = np.array([1., 2.])
     
-    # Compute jac_f using sym_f_jac
     f_, jac = f_jac(f, (x1, x2), x0) #type: ignore
     
     # Check that the result is correct
     np.testing.assert_almost_equal(f_(x0), f_numpy(x0), decimal=2)
     np.testing.assert_almost_equal(jac, jac_f_numpy(x0), decimal=2)
+
+def test_f_grad():
+    """Test that f_grad returns the correct result."""
+    # Define a simple vector function
+    x1, x2 = sp.symbols('x1 x2')
+    f = sp.Matrix([x1**2 + x2, x2**2 + 2*x1])
+
+    def f_numpy(x: NDArray[np.float64]) -> NDArray[np.float64]:
+        return np.array([[x[0]**2 + x[1]], 
+                        [x[1]**2 + 2*x[0]]])
+
+    def grad_f_numpy(x: NDArray[np.float64]) -> NDArray[np.float64]:
+        return np.array([[2*x[0], 2], 
+                         [1, 2*x[1]]])
+    
+    # Define the point at which to evaluate f and jac_f
+    x0 = np.array([1., 2.])
+    
+    f_, grad = f_grad(f, (x1, x2), x0) #type: ignore
+    
+    # Check that the result is correct
+    np.testing.assert_almost_equal(f_(x0), f_numpy(x0), decimal=2)
+    np.testing.assert_almost_equal(grad, grad_f_numpy(x0), decimal=2)
 
 def test_f_hess():
     """Test that f_hess returns the correct result."""
@@ -44,7 +67,6 @@ def test_f_hess():
     # Define the point at which to evaluate f and hess_f
     x0 = np.array([1., 2.])
     
-    # Compute hess_f using sym_f_hess
     f_, hess = f_hess(f, (x1, x2), x0) #type: ignore
     
     # Check that the result is correct
@@ -64,7 +86,6 @@ def test_forward_finite_jac():
     # Define the point at which to evaluate f and jac_f
     x0 = np.array([1., 2.])
     
-    # Compute jac_f using sym_f_jac
     f_, jac = forward_finite_jac(f, x0, eps=1e-8) #type: ignore
     
     # Check that the result is correct
@@ -85,7 +106,6 @@ def test_forward_finite_hess():
     # Define the point at which to evaluate f and hess_f
     x0 = np.array([1., 2.])
     
-    # Compute hess_f using sym_f_hess
     f_, hess = forward_finite_hess(f, x0, eps=1e-8) #type: ignore
     
     # Check that the result is correct

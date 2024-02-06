@@ -28,6 +28,29 @@ def f_jac(f: sp.Matrix, symbols: Tuple[sp.Symbol], x0: NDArray[np.float64]) -> T
 
     return f_func, jac_numpy(*x0)
 
+def f_grad(f: sp.Matrix, symbols: Tuple[sp.Symbol], x0: NDArray[np.float64]) -> Tuple[Callable[[NDArray[np.float64]], NDArray[np.float64]], NDArray[np.float64]]:
+    """ Compute the gradient of a multivariate vector function f(x) at x.
+
+    Args:
+        f (Callable[[NDArray[np.float64]], np.float64]): Vector function to compute gradient of.
+        x (NDArray[np.float64]): Point at which to compute gradient.
+
+    Return:
+        Tuple[Callable[[NDArray[np.float64]], np.float64], NDArray[np.float64]]: the function f, gradient of f at x.
+    """
+    sym_jac = f.jacobian(symbols)
+
+    # Convert the Sympy matrix f to a NumPy function
+    f_numpy_func = sp.lambdify(symbols, f, 'numpy')
+    def f_func(x: NDArray[np.float64]) -> NDArray[np.float64]:
+        return f_numpy_func(*x)
+
+    # Convert the Sympy matrix jac to a NumPy array
+    jac_numpy = sp.lambdify(symbols, sym_jac, 'numpy')
+
+    return f_func, jac_numpy(*x0).T # Transpose the Jacobian to get the gradient
+
+
 def f_hess(f: sp.Matrix, symbols: Tuple[sp.Symbol], x0: NDArray[np.float64]) -> Tuple[Callable[[NDArray[np.float64]], NDArray[np.float64]], NDArray[np.float64]]:
     """ Compute the Hessian of a multivariate vector function f(x) at x.
 
