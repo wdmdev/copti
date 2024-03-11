@@ -1,7 +1,6 @@
 import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import linprog
-from scipy.linalg import block_diag
 from typing import List, Tuple
 
 def find_feasible_point(g: NDArray[np.float64], A: NDArray[np.float64], 
@@ -31,7 +30,8 @@ def find_feasible_point(g: NDArray[np.float64], A: NDArray[np.float64],
 
 
 def primal_active_set(H: NDArray[np.float64], g: NDArray[np.float64], A_ineq: NDArray[np.float64], 
-                      b_ineq: NDArray[np.float64], x0: NDArray[np.float64]) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
+                      b_ineq: NDArray[np.float64], x0: NDArray[np.float64],
+                      tol: float = 1e-5) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Primal Active Set Method for Convex Inequality Constrained QPs.
 
     Args:
@@ -46,6 +46,8 @@ def primal_active_set(H: NDArray[np.float64], g: NDArray[np.float64], A_ineq: ND
             The inequality constraint vector.
         x0 : np.ndarray
             The initial point.
+        tol : float, optional
+            Tolerance for 0 checks in the algorithm. Defaults to 1e-5.
     
     Returns:
     ----------
@@ -61,30 +63,31 @@ def primal_active_set(H: NDArray[np.float64], g: NDArray[np.float64], A_ineq: ND
             Ak = A_ineq[Wk]
             matrix = np.block([[H, -Ak.T],
                                [-Ak, np.zeros((Ak.shape[0], Ak.shape[0]))]])
-            vector = np.concatenate([-H @ xk - g, np.zeros(Ak.shape[0])])
+            vector = np.concatenate([-(H @ xk) - g, np.zeros(Ak.shape[0])])
         else:
             # If the working set is empty, solve the unconstrained problem
             matrix = H
-            vector = -H @ xk - g
+            vector = -(H @ xk) - g
 
         solution = np.linalg.solve(matrix, vector)
-        p_star = solution[:len(xk)]
-        mu = solution[len(xk):] if Wk else None
+        p_star = solution[:len(xk)] #direction to move
+        mu = np.zeros(len(A_ineq))
 
-        if np.linalg.norm(p_star) == 0:
-            if Wk and all(mu_i >= 0 for mu_i in mu): #type: ignore
+        if Wk:
+            for i, mu_i in zip(Wk, solution[len(xk):]):
+                mu[i] = mu_i
+
+        if abs(np.linalg.norm(p_star)) <= tol:
+            if not Wk or all(mu_i >= 0 for mu_i in mu): #type: ignore
                 # Optimal solution found
                 return xk, mu #type: ignore
-            elif not Wk:
-                # If no active constraints and no direction to move, we found the solution
-                return xk, np.zeros(len(A_ineq))
             else:
-                # Remove constraint with negative mu
-                j = next(i for i, mu_i in enumerate(mu) if mu_i < 0) #type: ignore
-                Wk.remove(Wk[j])
+                # Remove constraint with most negative mu
+                j = np.argmin(mu)
+                Wk.pop(j)
         else:
-            # Compute distance to nearest inactive constraint
-            alpha = 1.
+            # Compute distance to nearest inactive constraint in search direction
+            alpha = np.inf
             j = None
             for i, (a_i, b_i) in enumerate(zip(A_ineq, b_ineq)):
                 if i not in Wk and a_i @ p_star < 0:
@@ -92,14 +95,14 @@ def primal_active_set(H: NDArray[np.float64], g: NDArray[np.float64], A_ineq: ND
                     if alpha_i < alpha:
                         alpha, j = alpha_i, i
 
-            if j is not None and alpha < 1:
+            if alpha < 1:
                 xk += alpha * p_star
                 Wk.append(j)
             else:
                 xk += p_star
 
 def _get_working_set(A_ineq: NDArray[np.float64], x: NDArray[np.float64], 
-                    b_ineq: NDArray[np.float64]) -> List[int]:
+                    b_ineq: NDArray[np.float64], tol:float = 1e-5) -> List[int]:
     """ Get the working set for the inequality constraints A*x <= b.
     
     Args:
@@ -110,10 +113,12 @@ def _get_working_set(A_ineq: NDArray[np.float64], x: NDArray[np.float64],
             The current point.
         b_ineq : np.ndarray
             The inequality constraint vector.
+        tol : float, optional
+            Tolerance for the working set. Defaults to 1e-5.
     
     Returns:
     ----------
         np.ndarray
             The working set for the inequality constraints.
     """
-    return [i for i, (a, b) in enumerate(zip(A_ineq, b_ineq)) if np.isclose(a @ x, b)]
+    return [i for i, (a, b) in enumerate(zip(A_ineq, b_ineq)) if abs(a @ x - b) <= tol]
