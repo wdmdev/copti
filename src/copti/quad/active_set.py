@@ -1,37 +1,12 @@
 import numpy as np
 from numpy.typing import NDArray
-from scipy.optimize import linprog
 from typing import List, Tuple
-
-def find_feasible_point(g: NDArray[np.float64], A: NDArray[np.float64], 
-                        b: NDArray[np.float64]) -> NDArray[np.float64]:
-    """ Find a feasible point for the inequality constraints A*x <= b.
-    This can be done using a simple linear program or any other method suitable for your problem.
-
-    Args:
-    ----------
-        g : np.ndarray
-            The objective function coefficients.
-        A : np.ndarray
-            The inequality constraint matrix.
-        b : np.ndarray
-            The inequality constraint vector.
-    
-    Returns:
-    ----------
-        np.ndarray
-            A feasible point for the inequality constraints.
-    """
-    res = linprog(g, A_eq=A, b_eq=b, method='highs')
-    if res.success:
-        return res.x
-    else:
-        raise ValueError("Feasible point not found")
+from copti.quad.solvers import range_space_solver, LU_solver
 
 
-def primal_active_set(H: NDArray[np.float64], g: NDArray[np.float64], A_ineq: NDArray[np.float64], 
-                      b_ineq: NDArray[np.float64], x0: NDArray[np.float64],
-                      tol: float = 1e-5) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
+def primal_active_set(H: NDArray[np.float64], g: NDArray[np.float64], A: NDArray[np.float64], 
+                      b: NDArray[np.float64], x0: NDArray[np.float64],
+                      k:int, tol: float = 1e-5) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Primal Active Set Method for Convex Inequality Constrained QPs.
 
     Args:
@@ -45,7 +20,9 @@ def primal_active_set(H: NDArray[np.float64], g: NDArray[np.float64], A_ineq: ND
         b_ineq : np.ndarray
             The inequality constraint vector.
         x0 : np.ndarray
-            The initial point.
+            The initial feasible point.
+        k : int
+            The maximum number of iterations.
         tol : float, optional
             Tolerance for 0 checks in the algorithm. Defaults to 1e-5.
     
@@ -56,52 +33,43 @@ def primal_active_set(H: NDArray[np.float64], g: NDArray[np.float64], A_ineq: ND
     """
 
     xk = x0
-    Wk = _get_working_set(A_ineq, xk, b_ineq)
+    Wk = _get_active_set(A, xk, b)
+    mu = np.zeros(A.shape[0])
 
-    while True:
-        if Wk:
-            Ak = A_ineq[Wk]
-            matrix = np.block([[H, -Ak.T],
-                               [-Ak, np.zeros((Ak.shape[0], Ak.shape[0]))]])
-            vector = np.concatenate([-(H @ xk) - g, np.zeros(Ak.shape[0])])
-        else:
-            # If the working set is empty, solve the unconstrained problem
-            matrix = H
-            vector = -(H @ xk) - g
+    for _ in range(k):
+        # solve for step direction p_star and lagrange multipliers mu
+        p_star, mu = _solve_qp(H, g, A, xk, Wk)
 
-        solution = np.linalg.solve(matrix, vector)
-        p_star = solution[:len(xk)] #direction to move
-        mu = np.zeros(len(A_ineq))
-
-        if Wk:
-            for i, mu_i in zip(Wk, solution[len(xk):]):
-                mu[i] = mu_i
-
-        if abs(np.linalg.norm(p_star)) <= tol:
-            if not Wk or all(mu_i >= 0 for mu_i in mu): #type: ignore
-                # Optimal solution found
-                return xk, mu #type: ignore
+        # if p_star is approximately 0
+        if abs(np.linalg.norm(p_star)) < tol:
+            if np.all([mu_i >= 0 for mu_i in mu]):
+                # The optimal solution has been found
+                return xk, mu
             else:
-                # Remove constraint with most negative mu
+                # remove most negative lagrange multiplier from the working set
                 j = np.argmin(mu)
-                Wk.pop(j)
+                Wk.remove(j)
         else:
-            # Compute distance to nearest inactive constraint in search direction
-            alpha = np.inf
-            j = None
-            for i, (a_i, b_i) in enumerate(zip(A_ineq, b_ineq)):
-                if i not in Wk and a_i @ p_star < 0:
-                    alpha_i = (b_i - a_i @ xk) / (a_i @ p_star)
-                    if alpha_i < alpha:
-                        alpha, j = alpha_i, i
+            # Compute the distance to the nearest inactive constraint in the search direction
+            A_i, b_i, indicies_map = _get_valid_inactive_constraints(A, b, Wk, p_star)
+            alpha = min(1, min((b_i - A_i@xk) / (A_i@p_star)))
 
+            # Check for blocking constraints
             if alpha < 1:
-                xk += alpha * p_star
+                # add blocking constraint to the working set
+                j_masked = np.argmin((b_i- A_i@xk) / (A_i@p_star))
+                j = indicies_map[j_masked]
                 Wk.append(j)
-            else:
-                xk += p_star
 
-def _get_working_set(A_ineq: NDArray[np.float64], x: NDArray[np.float64], 
+            # Take a step in the direction of p_star
+            xk += alpha*p_star
+        
+    return xk, mu
+
+
+
+
+def _get_active_set(A_ineq: NDArray[np.float64], x: NDArray[np.float64], 
                     b_ineq: NDArray[np.float64], tol:float = 1e-5) -> List[int]:
     """ Get the working set for the inequality constraints A*x <= b.
     
@@ -122,3 +90,34 @@ def _get_working_set(A_ineq: NDArray[np.float64], x: NDArray[np.float64],
             The working set for the inequality constraints.
     """
     return [i for i, (a, b) in enumerate(zip(A_ineq, b_ineq)) if abs(a @ x - b) <= tol]
+
+def _solve_qp(H: NDArray[np.float64], g:NDArray[np.float64],
+                A: NDArray[np.float64], xk: NDArray[np.float64], Wk: List[int]) \
+                    -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
+    if Wk:
+        # solution = range_space_solver(H, g, A[Wk], np.zeros(len(Wk)))
+        solution = LU_solver(H, -np.dot(H,xk) - g, A[Wk], np.zeros(len(Wk)))
+    else:
+        solution = np.linalg.solve(H, np.dot(H, -np.dot(H, xk) - g))
+
+    p_star = solution[:len(xk)] #direction to move
+    mu = np.zeros(A.shape[0])
+
+    if Wk:
+        for i, mu_i in zip(Wk, solution[len(xk):]):
+            mu[i] = mu_i
+
+    return p_star, mu
+
+def _get_valid_inactive_constraints(A: NDArray[np.float64], b: NDArray[np.float64], 
+                              Wk: List[int], p_star:NDArray[np.float64]) -> Tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.signedinteger]]:
+    i_mask = np.ones(A.shape, dtype=bool)
+    i_mask[Wk] = False
+    original_indices = np.arange(A.shape[0])
+    indices_map = original_indices[i_mask[:,0]]  # Mapping indices from Ai back to A
+    # Use mask to choose inactive constraints
+    A_i = A[i_mask[:,:]].reshape(i_mask[:,0].sum(), -1)
+    b_i = b[i_mask[:,0]]
+    ap_mask = A_i@p_star < 0
+
+    return A_i[ap_mask], b_i[ap_mask], indices_map[ap_mask]
