@@ -1,7 +1,8 @@
 import numpy as np
 from numpy.typing import NDArray
-from typing import List, Tuple
+from typing import Set, List, Tuple
 from copti.quad.solvers import range_space_solver, LU_solver
+from scipy.linalg import lu_factor, lu_solve
 
 
 def primal_active_set(H: NDArray[np.float64], g: NDArray[np.float64], A: NDArray[np.float64], 
@@ -34,7 +35,6 @@ def primal_active_set(H: NDArray[np.float64], g: NDArray[np.float64], A: NDArray
 
     xk = x0
     Wk = _get_active_set(A, xk, b)
-    mu = np.zeros(A.shape[0])
 
     for _ in range(k):
         # solve for step direction p_star and lagrange multipliers mu
@@ -59,7 +59,7 @@ def primal_active_set(H: NDArray[np.float64], g: NDArray[np.float64], A: NDArray
                 # add blocking constraint to the working set
                 j_masked = np.argmin((b_i- A_i@xk) / (A_i@p_star))
                 j = indicies_map[j_masked]
-                Wk.append(j)
+                Wk.add(j)
 
             # Take a step in the direction of p_star
             xk += alpha*p_star
@@ -70,7 +70,7 @@ def primal_active_set(H: NDArray[np.float64], g: NDArray[np.float64], A: NDArray
 
 
 def _get_active_set(A_ineq: NDArray[np.float64], x: NDArray[np.float64], 
-                    b_ineq: NDArray[np.float64], tol:float = 1e-5) -> List[int]:
+                    b_ineq: NDArray[np.float64], tol:float = 1e-5) -> Set[int]:
     """ Get the working set for the inequality constraints A*x <= b.
     
     Args:
@@ -89,14 +89,14 @@ def _get_active_set(A_ineq: NDArray[np.float64], x: NDArray[np.float64],
         np.ndarray
             The working set for the inequality constraints.
     """
-    return [i for i, (a, b) in enumerate(zip(A_ineq, b_ineq)) if abs(a @ x - b) <= tol]
+    return {i for i, (a, b) in enumerate(zip(A_ineq, b_ineq)) if abs(a @ x - b) <= tol}
 
 def _solve_qp(H: NDArray[np.float64], g:NDArray[np.float64],
-                A: NDArray[np.float64], xk: NDArray[np.float64], Wk: List[int]) \
+                A: NDArray[np.float64], xk: NDArray[np.float64], Wk: Set[int]) \
                     -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
+    Wk = list(Wk)
     if Wk:
-        # solution = range_space_solver(H, g, A[Wk], np.zeros(len(Wk)))
-        solution = LU_solver(H, -np.dot(H,xk) - g, A[Wk], np.zeros(len(Wk)))
+        solution = range_space_solver(H=H, g=np.dot(H,xk) + g, A=A[Wk], b=np.zeros(len(Wk)))
     else:
         solution = np.linalg.solve(H, np.dot(H, -np.dot(H, xk) - g))
 
@@ -110,7 +110,8 @@ def _solve_qp(H: NDArray[np.float64], g:NDArray[np.float64],
     return p_star, mu
 
 def _get_valid_inactive_constraints(A: NDArray[np.float64], b: NDArray[np.float64], 
-                              Wk: List[int], p_star:NDArray[np.float64]) -> Tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.signedinteger]]:
+                              Wk: Set[int], p_star:NDArray[np.float64]) -> Tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.signedinteger]]:
+    Wk = list(Wk)
     i_mask = np.ones(A.shape, dtype=bool)
     i_mask[Wk] = False
     original_indices = np.arange(A.shape[0])
