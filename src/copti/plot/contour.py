@@ -5,6 +5,7 @@ from numpy.typing import NDArray
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm #colormap
 import matplotlib.patches as mpatches
+import matplotlib.lines as mlines
 
 
 
@@ -40,29 +41,33 @@ def plot_2d(f:Callable[[NDArray[np.float64]], np.float64],
     if show:
         plt.show()
 
-def plot_2d_constrained(f:Callable[[NDArray[np.float64]], np.float64], 
-            x1: NDArray[np.float64], x2: NDArray[np.float64],
-            constraints:List[Callable[[NDArray[np.float64]], np.float64]],
-            save_path:Union[str,None]=None, show:bool=False, 
-            color_map:str="RdYlBu_r") -> None:
-    """ Plot a 2d function f(x, y) with a contour plot and the feasible region.
-    
+def plot_2d_constrained(f: Callable[[np.ndarray], float], 
+                        x1: NDArray[np.float64], x2: NDArray[np.float64],
+                        constraints: List[Callable[[NDArray[np.float64]], float]],
+                        solution_path: Union[NDArray[np.float64], None] = None,
+                        save_path: Union[str, None] = None, 
+                        show: bool = False, 
+                        color_map: str = "RdYlBu_r") -> None:
+    """Plot a 2D function f(x, y) with a contour plot, the feasible region, and a solution path.
+
     Args:
     ----------
-        f : Callable[[np.ndarray], float]
+        f : Callable[[NDArray[np.float64]], float]
             Function to plot.
-        x1 : np.ndarray
+        x1 : NDArray[np.float64] 
             Array of x1 values.
-        x2 : np.ndarray
+        x2 : NDArray[np.float64] 
             Array of x2 values.
-        constraints : List[Callable[[np.ndarray], float]]
+        constraints : List[Callable[[NDArray[np.float64]], float]]
             List of constraint functions.
-        save_path : Union[str,None], optional
+        save_path : Union[str, None], optional
             Path to save the plot. Defaults to None.
         show : bool, optional
             Show the plot. Defaults to False.
         color_map : str, optional
-            Color map for the contour plot. Defaults to "RdYlBu_r". 
+            Color map for the contour plot. Defaults to "RdYlBu_r".
+        solution_path : NDArray[np.float64], optional
+            Array of points representing the solution path. Defaults to None.
     """
     # Create a meshgrid for the x values
     X1, X2 = np.meshgrid(x1, x2)
@@ -85,24 +90,36 @@ def plot_2d_constrained(f:Callable[[NDArray[np.float64]], np.float64],
 
     # Plotting
     plt.figure(figsize=(8, 6))
-
-    # Adjust contour levels to improve visibility around zero
-    levels = np.linspace(Z.min(), Z.max(), 50)  # More uniform distribution of levels
     cmap = cm.get_cmap(color_map)
-    contour = plt.contour(X1, X2, Z, levels=levels, cmap=cmap)
+    contour = plt.contour(X1, X2, Z, levels=np.linspace(Z.min(), Z.max(), 50), cmap=cmap)
     plt.clabel(contour, inline=True, fontsize=8)
 
     plt.imshow(feasible, extent=(x1.min(), x1.max(), x2.min(), x2.max()), 
                origin='lower', alpha=0.3, cmap='Greys', aspect='auto')
 
-    # Create a custom legend for the feasible region
-    grey_patch = mpatches.Patch(color='grey', label='Feasible Region')
-    plt.legend(handles=[grey_patch])
+    handles = []
+    grey_patch = mpatches.Patch(color='grey', alpha=0.3, label='Feasible Region')
+    handles.append(grey_patch)
+
+    # Plot solution path if provided
+    if solution_path is not None:
+        plt.plot(solution_path[:, 0], solution_path[:, 1], '-', color='green')
+        plt.plot(solution_path[0, 0], solution_path[0, 1], 'go', markersize=5)  # Start
+        plt.plot(solution_path[-1, 0], solution_path[-1, 1], 'g*', markersize=10)  # End
+
+        # Legend
+        line_legend = mlines.Line2D([], [], color='green', markersize=5, label='Solution Path')
+        circle_legend = mlines.Line2D([], [], color='green', marker='o', markersize=5, linestyle='None', 
+                                      label=f'Initial Point ({solution_path[0, 0]:.2f}, {solution_path[0, 1]:.2f})')
+        star_legend = mlines.Line2D([], [], color='green', marker='*', markersize=10, linestyle='None', 
+                                    label=f'Solution ({solution_path[-1, 0]:.2f}, {solution_path[-1, 1]:.2f})')
+
+        handles.extend([line_legend, circle_legend, star_legend])
+
+    plt.legend(handles=handles)
 
     plt.colorbar(contour)
-
-    #get name of function f and add to title
-    plt.title(f'Contour Plot of {f.__name__}(x) and Feasible Region')
+    plt.title(f'Contour Plot of {f.__name__} and Feasible Region')
     plt.xlabel('x1')
     plt.ylabel('x2')
     plt.grid(True)
@@ -111,3 +128,4 @@ def plot_2d_constrained(f:Callable[[NDArray[np.float64]], np.float64],
         plt.savefig(save_path)
     if show:
         plt.show()
+

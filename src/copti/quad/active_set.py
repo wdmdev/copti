@@ -1,13 +1,13 @@
 import numpy as np
 from numpy.typing import NDArray
-from typing import Set, List, Tuple
-from copti.quad.solvers import range_space_solver, LU_solver
-from scipy.linalg import lu_factor, lu_solve
+from typing import Set, Tuple
+from copti.quad.solvers import range_space_solver
 
 
 def primal_active_set(H: NDArray[np.float64], g: NDArray[np.float64], A: NDArray[np.float64], 
                       b: NDArray[np.float64], x0: NDArray[np.float64],
-                      k:int, tol: float = 1e-5) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
+                      k:int, tol: float = 1e-5) \
+                        -> Tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
     """Primal Active Set Method for Convex Inequality Constrained QPs.
 
     Args:
@@ -29,11 +29,13 @@ def primal_active_set(H: NDArray[np.float64], g: NDArray[np.float64], A: NDArray
     
     Returns:
     ----------
-        A tuple of x and mu. 
-        Where x is the optimal solution and mu are the Lagrange multipliers.
+        A tuple of x, mu, and iterations. 
+        Where x is the optimal solution, mu are the Lagrange multipliers, 
+        and iterations are the values of x at each iteration of the algorithm.
     """
 
     xk = x0
+    iterations = np.array([x0])
     Wk = _get_active_set(A, xk, b)
 
     for _ in range(k):
@@ -44,11 +46,12 @@ def primal_active_set(H: NDArray[np.float64], g: NDArray[np.float64], A: NDArray
         if abs(np.linalg.norm(p_star)) < tol:
             if np.all([mu_i >= 0 for mu_i in mu]):
                 # The optimal solution has been found
-                return xk, mu
+                return xk, mu, iterations
             else:
                 # remove most negative lagrange multiplier from the working set
                 j = np.argmin(mu)
                 Wk.remove(j)
+                iterations = np.vstack([iterations, xk])
         else:
             # Compute the distance to the nearest inactive constraint in the search direction
             A_i, b_i, indicies_map = _get_valid_inactive_constraints(A, b, Wk, p_star)
@@ -63,8 +66,9 @@ def primal_active_set(H: NDArray[np.float64], g: NDArray[np.float64], A: NDArray
 
             # Take a step in the direction of p_star
             xk += alpha*p_star
-        
-    return xk, mu
+            iterations = np.vstack([iterations, xk])
+
+    return xk, mu, iterations
 
 
 
