@@ -38,20 +38,19 @@ def LU_solver(H: NDArray[np.float64], g: NDArray[np.float64],
 
     return z
 
-def range_space_solver(H: NDArray[np.float64], g: NDArray[np.float64],
-                       A: NDArray[np.float64], b: NDArray[np.float64]) \
-                        -> NDArray[np.float64]:
+def range_space_solver(H: NDArray[np.float64], g: NDArray[np.float64], 
+                       A: NDArray[np.float64], b: NDArray[np.float64]) -> NDArray[np.float64]:
     """Solve the system using the range space of the constraint matrix.
 
     Args:
     ----------
-    H : NDArray[np.float64]
+    H: NDArray[np.float64]
         The Hessian matrix of the quadratic problem.
-    g : NDArray[np.float64]
+    g: NDArray[np.float64]
         The gradient of the quadratic problem.
-    A : NDArray[np.float64]
+    A: NDArray[np.float64]
         The constraint matrix A of the system.
-    b : NDArray[np.float64]
+    b: NDArray[np.float64]
         The right hand side constraint vector b of the system.
 
     Returns:
@@ -59,25 +58,23 @@ def range_space_solver(H: NDArray[np.float64], g: NDArray[np.float64],
     NDArray[np.float64]
         The solution of the system.
     """
+    # Step 1: Cholesky factorize H = L L^T
+    L = np.linalg.cholesky(H)
+    
+    # Step 2: Solve H v = g for v (to be used in step 4)
+    v = np.linalg.solve(H, g)
+    
+    # Steps for computing Y = H^{-1} A indirectly using Cholesky factors
+    Z = np.linalg.solve(L.T, A.T)  # Solves LZ = A for Z
+    Y = np.linalg.solve(L.T, Z)  # Solves L^T Y = Z for Y, giving Y = H^{-1} A
 
-     # Step 1: Cholesky factorize H = L * L'
-    L = scipy.linalg.cholesky(H, lower=True)
+    # Step 3: Form H_A = A^T Y correctly
+    H_A = A @ Y
     
-    # Step 2: Solve H*v = g for v
-    v = scipy.linalg.cho_solve((L, True), g)
+    # Step 4: Solve H_A lambda = b + A^T v for lambda
+    lambda_ = np.linalg.solve(H_A, b + A @ v)
     
-    # Step 3: Form H_A = A' * H^-1 * A = L_A * L_A' and its factorization
-    # First solve L * Y = A.T for Y using forward substitution to avoid forming H^-1
-    Y = scipy.linalg.solve_triangular(L, A.T, lower=True, trans='T')
-    H_A = Y.T @ Y  # This is A' * H^-1 * A
-    # Cholesky factorize H_A
-    L_A = scipy.linalg.cholesky(H_A, lower=True)
-    
-    # Step 4: Solve H_A * lambda = b + A' * v for lambda
-    rhs_lambda = b + A @ v
-    lambda_ = scipy.linalg.cho_solve((L_A, True), rhs_lambda)
-    
-    # Step 5: Solve H * x = A * lambda - g for x
-    x = scipy.linalg.cho_solve((L, True), A.T @ lambda_ - g)
-    
-    return np.concatenate([x, lambda_])
+    # Step 5: Solve H x = A lambda - g for x
+    x = np.linalg.solve(H, A.T @ lambda_ - g)
+
+    return np.concatenate([x, lambda_], axis=None)
