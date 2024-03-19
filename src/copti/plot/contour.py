@@ -60,14 +60,14 @@ def plot_2d_constrained(f: Callable[[np.ndarray], float],
             Array of x2 values.
         constraints : List[Callable[[NDArray[np.float64]], float]]
             List of constraint functions.
+        solution_path : NDArray[np.float64], optional
+            Array of points representing the solution path. Defaults to None.
         save_path : Union[str, None], optional
             Path to save the plot. Defaults to None.
         show : bool, optional
             Show the plot. Defaults to False.
         color_map : str, optional
             Color map for the contour plot. Defaults to "RdYlBu_r".
-        solution_path : NDArray[np.float64], optional
-            Array of points representing the solution path. Defaults to None.
     """
     # Create a meshgrid for the x values
     X1, X2 = np.meshgrid(x1, x2)
