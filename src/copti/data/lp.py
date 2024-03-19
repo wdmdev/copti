@@ -1,9 +1,9 @@
-from typing import Tuple
+from typing import Tuple, Optional
 import numpy as np
 from numpy import random, dot
 from numpy.typing import NDArray
 
-def random_lp_problem(m: int, n: int) -> \
+def random_lp_problem(m: int, n: int, seed: Optional[int] = None) -> \
         Tuple[NDArray[np.float64], NDArray[np.float64], 
               NDArray[np.float64], NDArray[np.float64],
               NDArray[np.float64], NDArray[np.float64]]:
@@ -16,6 +16,8 @@ def random_lp_problem(m: int, n: int) -> \
         The number of rows in matrix A.
     n : int
         The number of columns in matrix A, should be greater than or equal to m.
+    seed: int
+        The seed for reproducibility.
     
     Returns:
     ----------
@@ -23,7 +25,7 @@ def random_lp_problem(m: int, n: int) -> \
                 The matrix A in R^(m x n) used in the LP problem, generated randomly.
     b :         NDArray[np.float64]
                 The vector b in R^m, derived as Ax, ensuring feasibility.
-    c :         NDArray[np.float64]
+    g :         NDArray[np.float64]
                 The cost vector c in R^n, derived as A'lambda + s, ensuring optimality.
     x :         NDArray[np.float64]
                 The decision variable vector x in R^n, partially random and partially zeros, indicating a basic feasible solution.
@@ -33,6 +35,11 @@ def random_lp_problem(m: int, n: int) -> \
                 The slack variables for the solution
     
     """
+    if seed:
+        # Set seed for reproducibility
+        random.seed(seed)
+        np.random.seed(seed)
+
     if n < m:
         raise ValueError("n must be greater or equal to m for a valid LP problem")
 
@@ -51,9 +58,9 @@ def random_lp_problem(m: int, n: int) -> \
     lambda_ = random.rand(m)
     
     # Calculate c as A'lambda + s
-    c = dot(A.T, lambda_) + s
+    g = dot(A.T, lambda_) + s
     
     # Calculate b as Ax
     b = dot(A, x)
     
-    return A, b, c, x, lambda_, s
+    return A, b, g, x, lambda_, s
